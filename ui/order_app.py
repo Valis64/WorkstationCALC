@@ -8,6 +8,8 @@ from typing import Any, Set, Iterable, List, Optional, Tuple
 # Local modules
 from data import db
 import time_utils
+from login_dialog import LoginDialog
+from config.settings import load_config, save_config
 
 # Dummy tkinter stand-ins.  The real application uses the tkinter messagebox
 # and filedialog modules but the test-suite patches these attributes, so simple
@@ -70,7 +72,7 @@ def parse_queue(html: str) -> List[str]:  # pragma: no cover - patched in tests
 
 
 def load_config_file() -> dict:  # pragma: no cover - patched in tests
-    return {}
+    return load_config()
 
 
 DEFAULT_DB_DIR = Path.home() / ".ybs_orders"
@@ -105,7 +107,7 @@ class OrderScraperApp:
         self.session = session
         self.credentials = credentials
         self.config = load_config_file() or {}
-        self.save_config = lambda: None  # tests patch this
+        self.save_config = lambda: save_config(self.config)  # tests may patch
 
         # Database setup
         DEFAULT_DB_DIR.mkdir(parents=True, exist_ok=True)
@@ -128,15 +130,20 @@ class OrderScraperApp:
         self.seen_queue_jobs: set[str] = set()
         self.refresh_countdown_job = None
         self.export_job = None
+        self.relogin_job = None
+        self.login_status_var = self._SimpleVar("red")
 
         # Build minimal UI (patched out in tests)
         self._build_settings_tab()
         self._build_date_range_tab()
         self.schedule_order_scrape()
+        self.schedule_relogin()
 
     # Placeholder methods for patched-out GUI builders
     def _build_settings_tab(self):
-        pass
+        # Minimal settings tab with manual re-login option and status indicator
+        ctk.CTkButton(self.root, text="Re-login", command=self.prompt_login).grid()
+        ctk.CTkLabel(self.root, textvariable=self.login_status_var).grid()
 
     def _build_date_range_tab(self):
         pass
@@ -231,8 +238,10 @@ class OrderScraperApp:
             return
         resp = ybs_client.login(session, self.credentials)
         if not resp.get("success"):
+            self.update_login_indicator(False)
             self.prompt_login()
             return
+        self.update_login_indicator(True)
         data = ybs_client.fetch_orders(session, self.orders_url)
         parse_orders(data.get("orders_html", ""))
         queue = parse_queue(data.get("queue_html", ""))
@@ -314,10 +323,51 @@ class OrderScraperApp:
 
     # Methods expected to exist but unused in tests
     def schedule_order_scrape(self):
-        pass
+        if not hasattr(self, "root") or not hasattr(self.root, "after"):
+            return
+        if self.refresh_countdown_job:
+            self.root.after_cancel(self.refresh_countdown_job)
+        self.refresh_countdown_job = self.root.after(
+            60_000, lambda: self._call_async(self.refresh_orders)
+        )
+
+    def schedule_relogin(self):
+        if not hasattr(self, "root") or not hasattr(self.root, "after"):
+            return
+        if self.relogin_job:
+            self.root.after_cancel(self.relogin_job)
+        self.relogin_job = self.root.after(
+            600_000, lambda: self._call_async(self._perform_relogin)
+        )
+
+    def _perform_relogin(self):
+        session = getattr(self, "session", None)
+        if self.credentials:
+            resp = ybs_client.login(session, self.credentials)
+            self.update_login_indicator(resp.get("success", False))
+        self.schedule_relogin()
+
+    def update_login_indicator(self, logged_in: bool) -> None:
+        var = getattr(self, "login_status_var", None)
+        if var is not None:
+            var.set("green" if logged_in else "red")
 
     def prompt_login(self):
-        pass
+        dialog = LoginDialog(self.root)
+        if hasattr(dialog, "grab_set"):
+            dialog.grab_set()
+        if hasattr(self.root, "wait_window"):
+            self.root.wait_window(dialog)
+        if getattr(dialog, "authenticated", False):
+            self.session = dialog.session
+            self.credentials = dialog.credentials
+            self.config.update(dialog.credentials)
+            self.save_config()
+            self.update_login_indicator(True)
+            self.schedule_order_scrape()
+            self.schedule_relogin()
+        else:
+            self.update_login_indicator(False)
 
     def load_jobs_by_date_range(self, start, end):  # pragma: no cover
         return []
