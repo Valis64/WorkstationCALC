@@ -1,0 +1,7 @@
+beautifulsoup4
+customtkinter
+matplotlib
+pytest
+requests
+tkcalendar
+mypy
