@@ -133,7 +133,6 @@ class OrderScraperApp:
         self._build_settings_tab()
         self._build_date_range_tab()
         self.schedule_order_scrape()
-        self.schedule_daily_export()
 
     # Placeholder methods for patched-out GUI builders
     def _build_settings_tab(self):

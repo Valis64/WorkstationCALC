@@ -188,7 +188,7 @@ class YBSControlTests(unittest.TestCase):
             patch.object(OrderScraperApp, "_build_settings_tab"), \
             patch.object(OrderScraperApp, "_build_date_range_tab"), \
             patch.object(OrderScraperApp, "schedule_order_scrape"), \
-            patch.object(OrderScraperApp, "schedule_daily_export"):
+            patch.object(OrderScraperApp, "schedule_daily_export") as mock_schedule_export:
 
             mock_ctk.StringVar.side_effect = lambda value="": SimpleVar(value)
             tabview_mock = MagicMock()
@@ -208,6 +208,7 @@ class YBSControlTests(unittest.TestCase):
             mock_connect.assert_called_with(expected)
             self.assertEqual(app.db_path_var.get(), expected)
             self.assertEqual(app.last_db_dir, str(DEFAULT_DB_DIR))
+            mock_schedule_export.assert_not_called()
 
     @patch("ui.order_app.filedialog.askdirectory", return_value="/exports")
     def test_browse_export_path_uses_last_directory(self, mock_dialog):
