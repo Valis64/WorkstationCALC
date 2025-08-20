@@ -1,5 +1,49 @@
-import customtkinter as ctk
-from tkinter import messagebox
+try:
+    import customtkinter as ctk
+    from tkinter import messagebox
+except Exception:  # pragma: no cover - used when tkinter is unavailable
+    class _DummyBox:
+        def __getattr__(self, name):
+            def _(*args, **kwargs):
+                return None
+            return _
+    messagebox = _DummyBox()
+
+    class ctk:  # type: ignore
+        class CTkToplevel:
+            pass
+
+        class StringVar:
+            def __init__(self, value: str = ""):
+                self.value = value
+
+            def get(self) -> str:
+                return self.value
+
+            def set(self, value: str) -> None:
+                self.value = value
+
+        class CTkLabel:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def grid(self, *args, **kwargs):
+                pass
+
+        class CTkEntry:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def grid(self, *args, **kwargs):
+                pass
+
+        class CTkButton:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def grid(self, *args, **kwargs):
+                pass
+
 import requests
 import os
 
